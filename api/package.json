@@ -1,0 +1,18 @@
+{
+  "name": "aiblocker-api",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "migrate:local": "wrangler d1 migrations apply aiblocker --local",
+    "migrate:remote": "wrangler d1 migrations apply aiblocker --remote"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250101.0",
+    "typescript": "^5.7.0",
+    "wrangler": "^4.42.0"
+  }
+}

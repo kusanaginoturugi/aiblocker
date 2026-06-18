@@ -1,0 +1,36 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "aiblocker-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-06-01",
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "aiblocker",
+      // `wrangler d1 create aiblocker` で発行された ID に差し替える
+      "database_id": "REPLACE_WITH_D1_ID",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "DIST",
+      // `wrangler kv namespace create DIST` で発行された ID に差し替える
+      "id": "REPLACE_WITH_KV_ID"
+    }
+  ],
+  "triggers": {
+    // Bloom filter の定期再ビルド（毎時）
+    "crons": ["0 * * * *"]
+  },
+  "vars": {
+    // 昇格閾値。報告がこの distinct reporter 数に達したら active に昇格
+    "PROMOTE_THRESHOLD": "3",
+    // ハッシュプレフィックス長（k-匿名性の粒度）
+    "PREFIX_LEN": "5"
+  }
+  // Turnstile のシークレットは `wrangler secret put TURNSTILE_SECRET` で登録
+}

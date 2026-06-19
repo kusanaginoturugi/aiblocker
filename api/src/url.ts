@@ -1,26 +1,17 @@
-// URL 正規化とハッシュ化。報告側と照合側で完全に同一であること。
-// 拡張機能側にも同じロジックを移植する（ハッシュ一致が照合の前提）。
+// ホスト正規化とハッシュ化。報告側と照合側で完全に同一であること。
+// 拡張機能側にも同じロジック（tldts + sha256Hex）を移植する（ハッシュ一致が照合の前提）。
+//
+// プライバシー方針: 報告・照合の単位は「登録ドメイン(eTLD+1)」のみ。
+// サブドメイン・パス・クエリ・フラグメントは一切使わない＝閲覧ページ単位の情報は外に出ない。
+// 例: https://blog.example.co.jp/a/b?x=1#f → "example.co.jp"
+//     https://foo.github.io/page        → "foo.github.io" (github.io は public suffix)
 
-export interface Normalized {
-  domain: string; // 例: "example.com"
-  url: string; // 例: "example.com/path/to/article"
-}
+import { getDomain } from "tldts";
 
-export function normalize(input: string): Normalized {
-  const u = new URL(input);
-
-  // ホスト: 小文字化 + 先頭 www. 除去
-  let host = u.hostname.toLowerCase();
-  if (host.startsWith("www.")) host = host.slice(4);
-
-  // パス: 末尾スラッシュ除去（ルートは空文字に）。大文字小文字は保持。
-  let path = u.pathname;
-  if (path.endsWith("/")) path = path.slice(0, -1);
-
-  // スキーム・クエリ・フラグメントは捨てる。
-  const domain = host;
-  const url = path ? `${host}${path}` : host;
-  return { domain, url };
+// 入力(URL文字列 or ホスト名)から登録ドメインを返す。
+// 判定不能(IP・localhost・不正)なら null。
+export function registrableDomain(input: string): string | null {
+  return getDomain(input); // tldts が小文字化・サブドメイン除去・PSL準拠で返す
 }
 
 export async function sha256Hex(s: string): Promise<string> {

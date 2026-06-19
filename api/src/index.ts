@@ -159,19 +159,19 @@ async function rebuild(env: Env): Promise<void> {
   await env.DIST.put(FILTER_KEY, bloom.toBytes() as unknown as ArrayBuffer);
 
   // プレフィックス別マップ（ハイブリッド二次照合用）
-  const byPrefix = new Map<string, { url: string[]; domain: string[] }>();
+  const byPrefix = new Map<string, string[]>();
   for (const e of entries) {
     const p = e.hash.slice(0, prefixLen);
     let bucket = byPrefix.get(p);
     if (!bucket) {
-      bucket = { url: [], domain: [] };
+      bucket = [];
       byPrefix.set(p, bucket);
     }
-    bucket[e.kind].push(e.hash);
+    bucket.push(e.hash);
   }
   await Promise.all(
-    [...byPrefix.entries()].map(([p, bucket]) =>
-      env.DIST.put(prefixKey(version, p), JSON.stringify(bucket), {
+    [...byPrefix.entries()].map(([p, hashes]) =>
+      env.DIST.put(prefixKey(version, p), JSON.stringify({ hashes }), {
         expirationTtl: PREFIX_TTL,
       })
     )

@@ -71,6 +71,13 @@
 - **reporter ID = 匿名 UUID**（拡張がローカル生成）。個人特定は不可。同一 `(hash, reporter)` は**最新票で上書き**するので、AI↔notAI の変更・撤回がそのまま反映される。
 - bot 対策に **Turnstile** トークンを付与（初期から導入）。`turnstile-spin` スキルで組む。
 
+### 報告 UI
+
+- Turnstile は登録ドメイン上でしか動かず、`chrome-extension://` オリジンや任意の閲覧先サイトでは検証できない。そこで報告フォームは **API が `GET /report-page` で配信する HTML**（workers.dev ドメイン）とし、拡張はそれを**新タブで開く**だけにする。Turnstile は常に正規ドメイン上で通る。
+- 入口は2つ: ツールバーの **popup**（現タブのホストを報告）と、blur 中ページに出る **オーバーレイボタン**（「AIじゃない」＝unvote / 「AIだと再報告」）。どちらも background 経由で報告ページを開く。
+- `host` / `vote` / `reporter` は **URL fragment(`#`)** で報告ページに渡す。fragment はサーバーに届かないので、Worker のログに生ホストを残さない。ハッシュ化は報告ページ内で行い、`/report` には hash のみ送る。
+- reporter UUID は **background が一度だけ生成して永続化**し報告ページに渡す。これで同一ユーザーの再投票が `/report` 側で上書きされる。
+
 ## 昇格ロジック（スパム耐性）
 
 - 同一 `hash` について **net = AI票(+1)の人数 − notAI票(−1)の人数** を集計。

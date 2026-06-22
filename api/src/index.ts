@@ -26,6 +26,9 @@ export default {
 
     const url = new URL(req.url);
     try {
+      if (req.method === "GET" && url.pathname === "/report-page") {
+        return cors(reportPage());
+      }
       if (req.method === "GET" && url.pathname === "/filter") {
         return cors(await getFilter(env));
       }
@@ -228,6 +231,112 @@ async function verifyTurnstile(
   const data = (await res.json()) as { success: boolean };
   return data.success === true;
 }
+
+// ---- GET /report-page ----------------------------------------------------
+// 拡張から新タブで開く報告フォーム。host/vote/reporter は URL fragment(#)で受け、
+// サーバーには届かない。ここで hash 化して同一オリジンの /report に投げる。
+// Turnstile は workers.dev ドメイン上なので正常に動く。
+
+function reportPage(): Response {
+  return new Response(REPORT_PAGE_HTML, {
+    headers: { "content-type": "text/html; charset=utf-8" },
+  });
+}
+
+const REPORT_PAGE_HTML = `<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aiblocker 報告</title>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 560px; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; }
+  input[type=text] { width: 100%; padding: .4rem; box-sizing: border-box; }
+  .row { margin: .9rem 0; }
+  label.vote { display: block; margin: .3rem 0; }
+  button { padding: .55rem 1.2rem; font-size: 1rem; cursor: pointer; }
+  pre { background: #f4f4f4; padding: 1rem; border-radius: 6px; white-space: pre-wrap; word-break: break-all; }
+  small { color: #666; }
+</style>
+</head>
+<body>
+<h1>サイトを報告</h1>
+<p>このサイトが生成AIコンテンツかどうかを報告する。送信前に Turnstile を通すこと。</p>
+
+<div class="row">
+  <label>ホスト<br><input type="text" id="host" placeholder="example.com"></label>
+</div>
+<div class="row">
+  <label class="vote"><input type="radio" name="vote" value="1" checked> 生成AIだと報告 (+1)</label>
+  <label class="vote"><input type="radio" name="vote" value="-1"> 生成AIじゃない / 取り消し (−1)</label>
+</div>
+
+<div class="cf-turnstile" data-sitekey="0x4AAAAAADncg2eAPsF8mQ0T" data-action="aiblocker-report"></div>
+
+<div class="row"><button id="send">送信</button></div>
+<pre id="out">（ここに結果が出る）</pre>
+<p><small>ホスト名はこのページの内側だけで SHA-256 化され、サーバーには元の文字列を送りません。</small></p>
+
+<script>
+const API = location.origin;
+
+function normalizeHost(input) {
+  let host = input.trim();
+  try {
+    if (/^[a-z][a-z0-9+.-]*:\\/\\//i.test(host)) host = new URL(host).hostname;
+    else if (host.includes("/")) host = new URL("http://" + host).hostname;
+  } catch (e) { return null; }
+  host = host.toLowerCase().replace(/\\.+$/, "");
+  if (host.startsWith("www.")) host = host.slice(4);
+  return host || null;
+}
+async function sha256Hex(s) {
+  const d = new TextEncoder().encode(s);
+  const b = new Uint8Array(await crypto.subtle.digest("SHA-256", d));
+  let h = ""; for (const x of b) h += x.toString(16).padStart(2, "0"); return h;
+}
+function fragParams() {
+  return new URLSearchParams(location.hash.replace(/^#/, ""));
+}
+
+let reporter = "";
+window.addEventListener("DOMContentLoaded", function () {
+  const p = fragParams();
+  const host = p.get("host");
+  if (host) document.getElementById("host").value = host;
+  if (p.get("vote") === "-1") {
+    document.querySelector('input[name=vote][value="-1"]').checked = true;
+  }
+  reporter = p.get("reporter") || crypto.randomUUID();
+});
+
+document.getElementById("send").addEventListener("click", async function () {
+  const out = document.getElementById("out");
+  const token = window.turnstile && turnstile.getResponse();
+  if (!token) { out.textContent = "先に Turnstile を通してください"; return; }
+  const host = normalizeHost(document.getElementById("host").value);
+  if (!host) { out.textContent = "ホストが不正です"; return; }
+  const vote = Number(document.querySelector('input[name=vote]:checked').value);
+  const hash = await sha256Hex(host);
+  out.textContent = "送信中...";
+  try {
+    const res = await fetch(API + "/report", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ hash: hash, kind: "domain", reporter: reporter, vote: vote, turnstileToken: token }),
+    });
+    const data = await res.json();
+    const verb = vote === 1 ? "AI報告" : "取り消し";
+    out.textContent = verb + " 完了: host=" + host + " net=" + data.net + " status=" + data.status + " (HTTP " + res.status + ")";
+  } catch (e) {
+    out.textContent = "エラー: " + e;
+  }
+  if (window.turnstile) turnstile.reset();
+});
+</script>
+</body>
+</html>`;
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {

@@ -8,7 +8,10 @@ const BADGE = "🤖"; // 変えたければここ。候補: ⚠️ 🫥 🚫 ✨
 (async () => {
   // 現ページ
   const pageRes = await checkMany([location.hostname]);
-  if (pageRes && pageRes[location.hostname]) applyBlur();
+  if (pageRes && pageRes[location.hostname]) {
+    applyBlur();
+    addReportButton();
+  }
 
   // 既存リンク
   await processLinks([...document.querySelectorAll("a[href]")]);
@@ -70,6 +73,33 @@ function addBadge(a) {
   badge.title = "AI 生成コンテンツとして報告されているサイト";
   badge.style.cssText = "font-size:0.9em;opacity:0.85;cursor:help;";
   a.appendChild(badge);
+}
+
+// blur 中のページに報告ボタンを出す。body は blur されるので documentElement 直下
+// （body の外）に置いて blur を回避する。クリックで報告ページを新タブで開く。
+function addReportButton() {
+  if (document.getElementById("aiblocker-report")) return;
+  const box = document.createElement("div");
+  box.id = "aiblocker-report";
+  box.style.cssText =
+    "position:fixed;bottom:12px;right:12px;z-index:2147483647;" +
+    "display:flex;gap:6px;font-family:system-ui,sans-serif;";
+
+  const mk = (label, vote) => {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.style.cssText =
+      "padding:6px 10px;font-size:12px;border:1px solid #ccc;border-radius:6px;" +
+      "background:#fff;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.2);";
+    b.addEventListener("click", () => {
+      chrome.runtime.sendMessage({ type: "openReport", host: location.hostname, vote });
+    });
+    return b;
+  };
+
+  box.appendChild(mk("🙅 AIじゃない", -1));
+  box.appendChild(mk("🤖 AIだと再報告", 1));
+  document.documentElement.appendChild(box);
 }
 
 function applyBlur() {

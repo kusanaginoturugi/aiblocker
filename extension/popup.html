@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<style>
+  body { font-family: system-ui, sans-serif; width: 240px; margin: 0; padding: 12px; }
+  .host { font-weight: 600; word-break: break-all; margin-bottom: 4px; }
+  .state { font-size: 12px; color: #666; margin-bottom: 10px; }
+  button { display: block; width: 100%; padding: 8px; margin: 6px 0; font-size: 13px; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="host" id="host">…</div>
+<div class="state" id="state"></div>
+<button id="ai">🤖 生成AIだと報告</button>
+<button id="notai">🙅 生成AIじゃない / 取り消し</button>
+<script src="dist/popup.js"></script>
+</body>
+</html>

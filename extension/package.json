@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild src/background.js src/content.js --bundle --outdir=dist --format=iife --target=chrome111",
+    "build": "esbuild src/background.js src/content.js src/popup.js --bundle --outdir=dist --format=iife --target=chrome111",
     "watch": "npm run build -- --watch"
   },
   "devDependencies": {

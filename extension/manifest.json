@@ -3,8 +3,12 @@
   "name": "aiblocker",
   "version": "0.1.0",
   "description": "生成AIコンテンツをドメイン単位でゆるやかに blur するクラウドソース型ブロッカー（最小プロト）。",
-  "permissions": ["storage", "alarms"],
+  "permissions": ["storage", "alarms", "tabs"],
   "host_permissions": ["https://aiblocker-api.kusanaginoturugi.workers.dev/*"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "aiblocker で報告"
+  },
   "background": {
     "service_worker": "dist/background.js",
     "scripts": ["dist/background.js"]

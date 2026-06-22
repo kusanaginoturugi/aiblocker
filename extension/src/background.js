@@ -39,24 +39,51 @@ async function getFilter() {
   return filter;
 }
 
-// content から複数ホストをまとめて受け、各ホストのヒット可否を返す。
-// 入力(raw)をそのままキーにして返す（content 側はそのキーで引く）。
+// 報告者の匿名 UUID。ローカルで一度だけ生成して永続化する。
+// 同一ユーザーの再投票を /report 側で上書き(ON CONFLICT)させるための安定キー。
+async function getReporter() {
+  const { reporter } = await chrome.storage.local.get("reporter");
+  if (reporter) return reporter;
+  const id = crypto.randomUUID();
+  await chrome.storage.local.set({ reporter: id });
+  return id;
+}
+
+// 報告ページ(Worker ホスト)を新タブで開く。host/vote/reporter は fragment(#)で渡す
+// ＝サーバーには届かない。Turnstile はそのページ(workers.dev)上で通す。
+async function openReport(host, vote) {
+  const h = normalizeHost(host) || "";
+  const v = vote === -1 ? -1 : 1;
+  const reporter = await getReporter();
+  const frag =
+    "#host=" + encodeURIComponent(h) +
+    "&vote=" + v +
+    "&reporter=" + encodeURIComponent(reporter);
+  await chrome.tabs.create({ url: `${API_BASE}/report-page` + frag });
+}
+
+// content / popup からのメッセージを捌く。
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg?.type !== "checkMany") return;
-  (async () => {
-    const filter = await getFilter();
-    const results = {};
-    if (filter && Array.isArray(msg.hosts)) {
-      for (const raw of msg.hosts) {
-        const host = normalizeHost(raw);
-        if (!host) { results[raw] = false; continue; }
-        const hash = await sha256Hex(host);
-        results[raw] = filter.test(hash);
+  if (msg?.type === "checkMany") {
+    (async () => {
+      const filter = await getFilter();
+      const results = {};
+      if (filter && Array.isArray(msg.hosts)) {
+        for (const raw of msg.hosts) {
+          const host = normalizeHost(raw);
+          if (!host) { results[raw] = false; continue; }
+          const hash = await sha256Hex(host);
+          results[raw] = filter.test(hash);
+        }
       }
-    }
-    sendResponse({ results });
-  })();
-  return true; // 非同期 sendResponse を使うため
+      sendResponse({ results });
+    })();
+    return true; // 非同期 sendResponse を使うため
+  }
+  if (msg?.type === "openReport") {
+    openReport(msg.host, msg.vote).then(() => sendResponse({ ok: true }));
+    return true;
+  }
 });
 
 chrome.runtime.onInstalled.addListener(() => {

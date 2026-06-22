@@ -39,15 +39,22 @@ async function getFilter() {
   return filter;
 }
 
+// content から複数ホストをまとめて受け、各ホストのヒット可否を返す。
+// 入力(raw)をそのままキーにして返す（content 側はそのキーで引く）。
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg?.type !== "check") return;
+  if (msg?.type !== "checkMany") return;
   (async () => {
     const filter = await getFilter();
-    if (!filter) return sendResponse({ hit: false });
-    const host = normalizeHost(msg.host);
-    if (!host) return sendResponse({ hit: false });
-    const hash = await sha256Hex(host);
-    sendResponse({ hit: filter.test(hash) });
+    const results = {};
+    if (filter && Array.isArray(msg.hosts)) {
+      for (const raw of msg.hosts) {
+        const host = normalizeHost(raw);
+        if (!host) { results[raw] = false; continue; }
+        const hash = await sha256Hex(host);
+        results[raw] = filter.test(hash);
+      }
+    }
+    sendResponse({ results });
   })();
   return true; // 非同期 sendResponse を使うため
 });

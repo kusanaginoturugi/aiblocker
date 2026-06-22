@@ -1,12 +1,8 @@
-// ホスト正規化とハッシュ化。報告側と照合側で完全に同一であること
-// （ハッシュ一致が照合の前提）。拡張機能側 (extension/src/normalize.js) に同じロジックを移植する。
-//
-// 照合単位は「フルホスト名」。小文字化し、先頭 `www.` と末尾ドットだけ落とす。
-// サブドメインは保持する（`blog.example.com` と `example.com` は別物）。
-// パス・クエリ・フラグメントは使わない＝閲覧ページ単位の情報は外に出ない。
+// ホスト正規化とハッシュ化。api/src/url.ts と完全に同一であること
+// （ハッシュ一致が照合の前提）。照合単位はフルホスト名（サブドメインを保持）。
 
 // 入力(URL文字列 or ホスト名)から正規化済みホストを返す。判定不能なら null。
-export function normalizeHost(input: string): string | null {
+export function normalizeHost(input) {
   let host = input.trim();
   try {
     if (/^[a-z][a-z0-9+.-]*:\/\//i.test(host)) {
@@ -22,7 +18,7 @@ export function normalizeHost(input: string): string | null {
   return host || null;
 }
 
-export async function sha256Hex(s: string): Promise<string> {
+export async function sha256Hex(s) {
   const data = new TextEncoder().encode(s);
   const digest = await crypto.subtle.digest("SHA-256", data);
   const bytes = new Uint8Array(digest);

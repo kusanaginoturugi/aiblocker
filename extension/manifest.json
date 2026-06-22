@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "aiblocker",
+  "version": "0.1.0",
+  "description": "生成AIコンテンツをドメイン単位でゆるやかに blur するクラウドソース型ブロッカー（最小プロト）。",
+  "permissions": ["storage", "alarms"],
+  "host_permissions": ["https://aiblocker-api.kusanaginoturugi.workers.dev/*"],
+  "background": { "service_worker": "dist/background.js" },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["dist/content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

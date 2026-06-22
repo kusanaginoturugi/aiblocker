@@ -1,31 +1,20 @@
 // 現ページの登録ホストがリスト入りなら blur。さらにページ内リンクのうち、
 // リンク先ホストがリスト入りのものにバッジ(絵文字)を付ける。
+// SPA の再描画で消えないよう、MutationObserver で追加リンクにも付け直す。
 // このスクリプト自体はネットワーク通信をしない（判定は background の Bloom で完結）。
 
 const BADGE = "🤖"; // 変えたければここ。候補: ⚠️ 🫥 🚫 ✨
 
 (async () => {
-  // ページ内リンクをホストごとにまとめる
-  const linkHosts = new Map(); // host -> [a要素]
-  for (const a of document.querySelectorAll("a[href]")) {
-    let host;
-    try { host = new URL(a.href, location.href).hostname; } catch { continue; }
-    if (!host) continue;
-    if (!linkHosts.has(host)) linkHosts.set(host, []);
-    linkHosts.get(host).push(a);
-  }
+  // 現ページ
+  const pageRes = await checkMany([location.hostname]);
+  if (pageRes && pageRes[location.hostname]) applyBlur();
 
-  // 現ページ + 全リンクホストを 1 回で問い合わせ
-  const hosts = [...new Set([location.hostname, ...linkHosts.keys()])];
-  const results = await checkMany(hosts);
-  if (!results) return;
+  // 既存リンク
+  await processLinks([...document.querySelectorAll("a[href]")]);
 
-  if (results[location.hostname]) applyBlur();
-
-  for (const [host, els] of linkHosts) {
-    if (!results[host]) continue;
-    for (const a of els) addBadge(a);
-  }
+  // 以後に追加・再描画されるリンクを監視（SPA 対応）
+  observeLinks();
 })();
 
 function checkMany(hosts) {
@@ -35,6 +24,41 @@ function checkMany(hosts) {
       resolve(r?.results || null);
     });
   });
+}
+
+async function processLinks(links) {
+  const linkHosts = new Map(); // host -> [a要素]
+  for (const a of links) {
+    if (a.dataset.aiblocker) continue; // 付与済みは skip
+    let host;
+    try { host = new URL(a.href, location.href).hostname; } catch { continue; }
+    if (!host) continue;
+    if (!linkHosts.has(host)) linkHosts.set(host, []);
+    linkHosts.get(host).push(a);
+  }
+  if (linkHosts.size === 0) return;
+  const results = await checkMany([...linkHosts.keys()]);
+  if (!results) return;
+  for (const [host, els] of linkHosts) {
+    if (!results[host]) continue;
+    for (const a of els) addBadge(a);
+  }
+}
+
+function observeLinks() {
+  const obs = new MutationObserver((muts) => {
+    const found = [];
+    for (const m of muts) {
+      for (const n of m.addedNodes) {
+        if (n.nodeType !== 1) continue; // 要素のみ
+        if (n.matches?.("a[href]")) found.push(n);
+        const inner = n.querySelectorAll?.("a[href]");
+        if (inner) for (const x of inner) found.push(x);
+      }
+    }
+    if (found.length) processLinks(found);
+  });
+  obs.observe(document.documentElement, { childList: true, subtree: true });
 }
 
 function addBadge(a) {

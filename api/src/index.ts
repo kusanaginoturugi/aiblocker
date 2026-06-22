@@ -95,11 +95,13 @@ async function postReport(req: Request, env: Env): Promise<Response> {
   const hash = String(body?.hash || "").toLowerCase();
   const kind = String(body?.kind || "");
   const reporter = String(body?.reporter || "");
+  const vote = body?.vote === undefined ? 1 : Number(body.vote); // +1=AI, -1=notAI(unvote)
   const token = body?.turnstileToken;
 
   if (!/^[0-9a-f]{64}$/.test(hash)) return json({ error: "bad hash" }, 400);
   if (kind !== "url" && kind !== "domain") return json({ error: "bad kind" }, 400);
   if (reporter.length < 8 || reporter.length > 64) return json({ error: "bad reporter" }, 400);
+  if (vote !== 1 && vote !== -1) return json({ error: "bad vote" }, 400);
 
   if (env.TURNSTILE_SECRET) {
     const ip = req.headers.get("cf-connecting-ip") || undefined;
@@ -113,21 +115,30 @@ async function postReport(req: Request, env: Env): Promise<Response> {
   const prefix = hash.slice(0, prefixLen);
   const threshold = Number(env.PROMOTE_THRESHOLD);
 
-  // 二重投票は UNIQUE(hash, reporter) で弾く
+  // 同一 (hash, reporter) は最新票で上書き（AI↔notAI の変更を許す）
   await env.DB.prepare(
-    "INSERT OR IGNORE INTO reports (hash, kind, reporter, created_at) VALUES (?, ?, ?, ?)"
+    `INSERT INTO reports (hash, kind, reporter, vote, created_at) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(hash, reporter) DO UPDATE SET
+       kind = excluded.kind,
+       vote = excluded.vote,
+       created_at = excluded.created_at`
   )
-    .bind(hash, kind, reporter, now)
+    .bind(hash, kind, reporter, vote, now)
     .run();
 
-  const countRow = await env.DB.prepare(
-    "SELECT COUNT(DISTINCT reporter) AS n FROM reports WHERE hash = ?"
+  // net = AI票(+1)の人数 − notAI票(−1)の人数。閾値以上で active、下回れば pending に降格。
+  const row = await env.DB.prepare(
+    `SELECT
+       COALESCE(SUM(CASE WHEN vote = 1 THEN 1 ELSE 0 END), 0) AS pos,
+       COALESCE(SUM(CASE WHEN vote = -1 THEN 1 ELSE 0 END), 0) AS neg
+     FROM reports WHERE hash = ?`
   )
     .bind(hash)
-    .first<{ n: number }>();
-  const count = countRow?.n ?? 0;
-  const status = count >= threshold ? "active" : "pending";
+    .first<{ pos: number; neg: number }>();
+  const net = (row?.pos ?? 0) - (row?.neg ?? 0);
+  const status = net >= threshold ? "active" : "pending";
 
+  // report_count には正味スコア(net)を格納する。
   await env.DB.prepare(
     `INSERT INTO entries (hash, kind, prefix, report_count, status, updated_at)
      VALUES (?, ?, ?, ?, ?, ?)
@@ -136,10 +147,10 @@ async function postReport(req: Request, env: Env): Promise<Response> {
        status = excluded.status,
        updated_at = excluded.updated_at`
   )
-    .bind(hash, kind, prefix, count, status, now)
+    .bind(hash, kind, prefix, net, status, now)
     .run();
 
-  return json({ ok: true, count, status }, 201);
+  return json({ ok: true, net, status }, 201);
 }
 
 // ---- Cron: 配布物の再ビルド ----------------------------------------------

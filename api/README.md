@@ -7,7 +7,7 @@
 
 - `GET  /filter` … Bloom filter 本体（バイナリ）。`x-filter-version` ヘッダ付き。全員が定期 DL し完全ローカル照合。
 - `GET  /list?prefix=xxxxx` … 該当プレフィックス帯の active フルハッシュ群（k-匿名性の二次照合用）。
-- `POST /report` … 報告。`{ hash, kind, reporter, turnstileToken? }`。閾値到達で `active` に昇格。
+- `POST /report` … 報告。`{ hash, kind, reporter, vote?, turnstileToken? }`。`vote` は `+1`=AI(既定) / `-1`=notAI(unvote)。net（AI票 − notAI票）が閾値以上で `active`、下回れば `pending` に降格。同一 `(hash, reporter)` は最新票で上書き。
 
 配布物（Bloom / プレフィックス）は Cron（毎時）で `active` エントリから再ビルドし KV に焼く。
 

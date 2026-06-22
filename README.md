@@ -18,18 +18,17 @@
 
 - [x] 仕様確定（`docs/spec.md`）
 - [x] API 実装 + ローカル検証（報告→昇格→再ビルド→配布、Bloom 往復一致まで確認）
-- [ ] 本番リソース作成と接続
+- [x] 本番リソース作成と接続（D1 / KV / `TURNSTILE_SECRET` / cron、公開 URL 有効）
 - [ ] 拡張機能
 
-## 次にやること（オーナー作業）
+## 本番（接続済み）
 
-リソース作成はアカウント権限が要るので手動。`api/` で:
+- URL: `https://aiblocker-api.kusanaginoturugi.workers.dev`
+- D1 `aiblocker` / KV `DIST` 作成・`api/wrangler.jsonc` に反映済み。
+- `TURNSTILE_SECRET` 登録済み＝検証 ON（widget sitekey `0x4AAAAAADncg2eAPsF8mQ0T`、mode `managed`、許可ドメイン `localhost` / `127.0.0.1` / 上記 workers.dev）。token 無しの `/report` は 403。
+- cron `0 * * * *`（active から配布物を毎時再ビルド）。
+- 更新は `api/` で `npx wrangler deploy`。スキーマ変更時は先に `npm run migrate:remote`。
 
-1. `npx wrangler d1 create aiblocker` → 発行された `database_id` を `api/wrangler.jsonc` に反映
-2. `npx wrangler kv namespace create DIST` → 発行された `id` を同上に反映
-3. `npx wrangler secret put TURNSTILE_SECRET` で Turnstile シークレット登録（widget は `turnstile-spin` で作成）
-4. `npm run migrate:remote` で本番 D1 にスキーマ適用
-5. `npx wrangler deploy` で公開、`/report` を実 Turnstile 込みで疎通確認
-6. GitHub リモート作成 → push（このリポジトリはまだ remote 未設定）
+## 次にやること
 
-その後、拡張機能（`extension/`）の最小プロトタイプ（`/filter` DL → ローカル照合 → blur）に着手。
+拡張機能（`extension/`）の最小プロトタイプ（`/filter` DL → ローカル照合 → blur）に着手。

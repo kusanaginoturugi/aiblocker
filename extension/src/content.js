@@ -6,9 +6,8 @@
 const BADGE = "🤖"; // 変えたければここ。候補: ⚠️ 🫥 🚫 ✨
 
 (async () => {
-  // 現ページ
-  const pageRes = await checkMany([location.hostname]);
-  if (pageRes && pageRes[location.hostname]) {
+  // 現ページ（SW の cold start で最初の応答が null になることがあるのでリトライ）
+  if (await checkPageWithRetry(location.hostname)) {
     applyBlur();
     addReportButton();
   }
@@ -19,6 +18,16 @@ const BADGE = "🤖"; // 変えたければここ。候補: ⚠️ 🫥 🚫 ✨
   // 以後に追加・再描画されるリンクを監視（SPA 対応）
   observeLinks();
 })();
+
+// SW が寝ているとき最初の応答が null になる。null の間だけ数回リトライする。
+async function checkPageWithRetry(host, tries = 5) {
+  for (let i = 0; i < tries; i++) {
+    const r = await checkMany([host]);
+    if (r) return !!r[host];
+    await new Promise((s) => setTimeout(s, 150 * (i + 1)));
+  }
+  return false;
+}
 
 function checkMany(hosts) {
   return new Promise((resolve) => {
@@ -102,13 +111,32 @@ function addReportButton() {
   document.documentElement.appendChild(box);
 }
 
+let blurObserver = null;
+
+// blur を適用し、SPA の hydration 等で class/style が剥がされても付け直す。
 function applyBlur() {
-  const style = document.createElement("style");
-  style.id = "aiblocker-style";
-  style.textContent = `
-    html.aiblocker-blur body { filter: blur(4px); transition: filter .15s ease; }
-    html.aiblocker-blur body:hover { filter: none; }
-  `;
-  (document.head || document.documentElement).appendChild(style);
-  document.documentElement.classList.add("aiblocker-blur");
+  installBlur();
+  if (blurObserver) return;
+  blurObserver = new MutationObserver(() => installBlur());
+  blurObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["class"],
+  });
+  if (document.head) blurObserver.observe(document.head, { childList: true });
+}
+
+// 冪等: style が無ければ挿し、class が無ければ付ける。
+function installBlur() {
+  if (!document.getElementById("aiblocker-style")) {
+    const style = document.createElement("style");
+    style.id = "aiblocker-style";
+    style.textContent = `
+      html.aiblocker-blur body { filter: blur(10px); transition: filter .15s ease; }
+      html.aiblocker-blur body:hover { filter: blur(3px); }
+    `;
+    (document.head || document.documentElement).appendChild(style);
+  }
+  if (!document.documentElement.classList.contains("aiblocker-blur")) {
+    document.documentElement.classList.add("aiblocker-blur");
+  }
 }
